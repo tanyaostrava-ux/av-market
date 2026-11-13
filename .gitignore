@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local scratch
+data/raw/
+logs/
+*.log
+*.tmp
+
+# The 50% snapshot is ~31 MB of JSON; the repository commits the gzipped copy
+# (data/cars.json.gz) so it can be uploaded through the GitHub web UI.
+data/cars.json
+data/catalog-parts/
