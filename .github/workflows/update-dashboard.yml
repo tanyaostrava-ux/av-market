@@ -1,0 +1,66 @@
+name: Rebuild dashboard
+
+# Manual rebuild of the published site.
+#
+# There is no cron on purpose: cars.av.by answers requests from GitHub's
+# datacenter IPs with a non-standard HTTP 468 (bot filter), so the cloud runner
+# cannot take a fresh snapshot. The data is scraped locally instead
+# (refresh-50k.bat) and committed by hand; this workflow rebuilds docs/ from
+# whatever data/cars.json.gz is in the repository and publishes it to Pages.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild-dashboard
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build static site
+        run: python scripts/build-static.py --force
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cars.json.gz docs
+          if git diff --cached --quiet; then
+            echo "No changes to publish"
+            exit 0
+          fi
+          git commit -m "chore: rebuild dashboard ($(date -u +%Y-%m-%d))"
+          # A manual upload can land while this job runs; rebase instead of
+          # failing with a non-fast-forward rejection.
+          git pull --rebase --autostash origin main
+          git push
+
+      - name: Summarize
+        if: always()
+        run: |
+          python -c "import gzip,json,pathlib; p=pathlib.Path('data/cars.json.gz'); m=json.loads(gzip.decompress(p.read_bytes())); print('cars:', m.get('count')); print('scraped_at:', m.get('scraped_at')); print('gz MB:', round(p.stat().st_size/1048576, 2))"
